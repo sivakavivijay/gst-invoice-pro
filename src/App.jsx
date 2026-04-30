@@ -101,48 +101,64 @@ export default function GSTInvoiceGenerator() {
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
           "anthropic-version": "2023-06-01",
           "anthropic-dangerous-direct-browser-access": "true"
         },
-  "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
-  "anthropic-version": "2023-06-01",
-  "anthropic-dangerous-direct-browser-access": "true"
-},
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: `You are a GST invoice assistant for Indian businesses. 
-Generate invoice line items based on user description.
-Return ONLY a JSON array, no markdown, no explanation.
-Each item: {"description": string, "hsn": string, "qty": number, "unit": string, "rate": number, "gst": number}
-HSN codes should be realistic. GST rates: 0,5,12,18,28. Units: Nos,Kg,Ltr,Mtr,Box,Set,Hr,Day.`,
-          messages: [{ role: "user", content: `Generate GST invoice line items for: ${aiPrompt}` }]
+          model: "claude-opus-4-6",
+          max_tokens: 1024,
+          messages: [
+            {
+              role: "user",
+              content: `Generate GST invoice line items for: ${aiPrompt}
+              
+Return ONLY a JSON array, no markdown, no explanation, no backticks.
+Each item must have: {"description": string, "hsn": string, "qty": number, "unit": string, "rate": number, "gst": number}
+HSN codes should be realistic Indian HSN codes.
+GST rates must be one of: 0, 5, 12, 18, 28
+Units must be one of: Nos, Kg, Ltr, Mtr, Box, Set, Hr, Day
+Example output:
+[{"description":"Website Design","hsn":"998314","qty":1,"unit":"Nos","rate":15000,"gst":18}]`
+            }
+          ]
         })
       });
+
       const data = await res.json();
-      console.log("API Response:", JSON.stringify(data));
+      console.log("Full API response:", JSON.stringify(data));
+
       if (data.error) {
-        showToast("❌ API Error: " + data.error.message);
+        showToast("❌ " + data.error.message);
         setAiLoading(false);
         return;
       }
-      const text = data.content?.find(b => b.type === "text")?.text || "[]";
-      console.log("Raw text:", text);
+
+      const text = data.content?.[0]?.text || "[]";
+      console.log("Text received:", text);
+      
       const cleaned = text.replace(/```json|```/g, "").trim();
       const parsed = JSON.parse(cleaned);
+      
       if (!Array.isArray(parsed) || parsed.length === 0) {
-        showToast("❌ AI returned empty. Try a more specific description.");
+        showToast("❌ No items generated. Try again.");
         setAiLoading(false);
         return;
       }
-      setItems(parsed.map(i => ({ ...defaultItem(), ...i, id: Date.now() + Math.random() })));
+
+      setItems(parsed.map(i => ({ 
+        ...defaultItem(), 
+        ...i, 
+        id: Date.now() + Math.random() 
+      })));
       setAiPrompt("");
-      showToast("✅ AI generated " + parsed.length + " line items!");
+      showToast("✅ AI generated " + parsed.length + " items!");
+
     } catch (e) {
-      showToast("❌ AI error. Please try again.");
+      console.error("Error:", e);
+      showToast("❌ Error: " + e.message);
     }
     setAiLoading(false);
   };
