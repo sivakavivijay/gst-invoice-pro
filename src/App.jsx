@@ -100,34 +100,40 @@ export default function GSTInvoiceGenerator() {
     setAiLoading(true);
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`,
+        "https://api.groq.com/openai/v1/chat/completions",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`
+          },
           body: JSON.stringify({
-            contents: [{
-              parts: [{
-                text: `Generate GST invoice line items for: ${aiPrompt}
-                
+            model: "llama-3.3-70b-versatile",
+            max_tokens: 1024,
+            temperature: 0.1,
+            messages: [
+              {
+                role: "system",
+                content: `You are a GST invoice assistant for Indian businesses.
 Return ONLY a JSON array, no markdown, no explanation, no backticks.
 Each item must have: {"description": string, "hsn": string, "qty": number, "unit": string, "rate": number, "gst": number}
 HSN codes should be realistic Indian HSN codes.
 GST rates must be one of: 0, 5, 12, 18, 28
-Units must be one of: Nos, Kg, Ltr, Mtr, Box, Set, Hr, Day
+Units must be one of: Nos, Kg, Ltr, Mtr, Box, Set, Hr, Day`
+              },
+              {
+                role: "user",
+                content: `Generate GST invoice line items for: ${aiPrompt}
 Example output:
 [{"description":"Website Design","hsn":"998314","qty":1,"unit":"Nos","rate":15000,"gst":18}]`
-              }]
-            }],
-            generationConfig: {
-              temperature: 0.1,
-              maxOutputTokens: 1024,
-            }
+              }
+            ]
           })
         }
       );
 
       const data = await res.json();
-      console.log("Gemini response:", JSON.stringify(data));
+      console.log("Groq response:", JSON.stringify(data));
 
       if (data.error) {
         showToast("❌ " + data.error.message);
@@ -135,7 +141,7 @@ Example output:
         return;
       }
 
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+      const text = data.choices?.[0]?.message?.content || "[]";
       console.log("Text received:", text);
 
       const cleaned = text.replace(/```json|```/g, "").trim();
